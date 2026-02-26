@@ -6,7 +6,7 @@ import datetime as dt
 # ================= CONFIG =================
 
 TOKEN = os.getenv("TOKEN")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+CHANNEL_ID = int(os.getenv("123456789012345678"))
 ROLE_NAME = "Aviso Horario"
 
 POST_TIME = dt.time(hour=5, minute=0)     # 05:00
