@@ -1,14 +1,13 @@
 import discord
 from discord.ext import commands, tasks
 import os
-import json
 import datetime as dt
 
 # ================= CONFIG =================
 
 TOKEN = os.getenv("TOKEN")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 ROLE_NAME = "Aviso Horario"
-CONFIG_FILE = "config.json"
 
 POST_TIME = dt.time(hour=5, minute=0)     # 05:00
 CHECK_TIME = dt.time(hour=17, minute=0)   # 17:00
@@ -33,20 +32,6 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ================= CONFIG FILE =================
-
-def load_config():
-    if not os.path.exists(CONFIG_FILE):
-        return {}
-    with open(CONFIG_FILE, "r") as f:
-        return json.load(f)
-
-def save_config(data):
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(data, f)
-
-config = load_config()
-
 # ================= EVENTS =================
 
 @bot.event
@@ -57,37 +42,23 @@ async def on_ready():
     if not daily_check.is_running():
         daily_check.start()
 
-# ================= COMANDO SETCANAL =================
-
-@bot.command()
-@commands.has_permissions(manage_guild=True)
-async def setcanal(ctx):
-    config["channel_id"] = ctx.channel.id
-    save_config(config)
-    await ctx.send(f"✅ Canal definido para votações: {ctx.channel.mention}")
-
 # ================= TAREFA 05:00 =================
+
+last_poll_message_id = None
 
 @tasks.loop(time=POST_TIME)
 async def daily_post():
-    channel_id = config.get("channel_id")
-    if not channel_id:
-        return
+    global last_poll_message_id
 
-    channel = bot.get_channel(channel_id)
+    channel = bot.get_channel(CHANNEL_ID)
     if not channel:
         return
-
-    today = dt.date.today().isoformat()
 
     descricao = "\n".join([f"{emoji} = {hora}" for emoji, hora in OPCOES.items()])
 
     embed = discord.Embed(
         title="🗳️ Votação diária de horário",
-        description=(
-            f"{descricao}\n\n"
-            "⏳ Tens até às **17:00** para votar."
-        ),
+        description=f"{descricao}\n\n⏳ Tens até às 17:00 para votar.",
         color=discord.Color.blurple()
     )
 
@@ -96,31 +67,23 @@ async def daily_post():
     for emoji in OPCOES.keys():
         await msg.add_reaction(emoji)
 
-    config["last_poll"] = {
-        "date": today,
-        "channel_id": channel_id,
-        "message_id": msg.id
-    }
-    save_config(config)
+    last_poll_message_id = msg.id
 
 # ================= TAREFA 17:00 =================
 
 @tasks.loop(time=CHECK_TIME)
 async def daily_check():
-    last_poll = config.get("last_poll")
-    if not last_poll:
+    global last_poll_message_id
+
+    if not last_poll_message_id:
         return
 
-    today = dt.date.today().isoformat()
-    if last_poll.get("date") != today:
-        return
-
-    channel = bot.get_channel(last_poll["channel_id"])
+    channel = bot.get_channel(CHANNEL_ID)
     if not channel:
         return
 
     try:
-        msg = await channel.fetch_message(last_poll["message_id"])
+        msg = await channel.fetch_message(last_poll_message_id)
     except:
         return
 
